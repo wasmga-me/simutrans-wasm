@@ -553,6 +553,26 @@ bool set_pakdir( const char *chkdir )
 
 
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+/// writes the settings the game writes as it quits, which it never does on the web
+extern "C" EMSCRIPTEN_KEEPALIVE void wg_save_files()
+{
+	if(  env_t::user_dir == NULL  ) {
+		return;
+	}
+	dr_chdir( env_t::user_dir );
+	loadsave_t settings_file;
+	if(  settings_file.wr_open("settings.xml",loadsave_t::xml,0,"settings only/",SAVEGAME_VER_NR) == loadsave_t::FILE_STATUS_OK  ) {
+		env_t::rdwr(&settings_file);
+		env_t::default_settings.rdwr(&settings_file);
+		settings_file.close();
+	}
+}
+#endif
+
+
 int simu_main(int argc, char** argv)
 {
 	std::set_new_handler(sim_new_handler);

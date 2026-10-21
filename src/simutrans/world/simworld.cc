@@ -3967,6 +3967,10 @@ bool karte_t::load(const char *filename)
 			if(  scenario->is_scripted()  ) {
 				scenario->open_info_win();
 			}
+#ifdef __EMSCRIPTEN__
+			// Resume carries on without a word
+			if(  strcmp( filename, "/wg/restore.sve" ) != 0  )
+#endif
 			create_win( new news_img("Spielstand wurde\ngeladen!\n"), w_time_delete, magic_none);
 		}
 		set_dirty();
@@ -6264,6 +6268,52 @@ static void heavy_rotate_saves(const char *prefix, uint32 sync_steps, uint32 num
 }
 
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+static bool web_snapshot_wanted = false;
+static bool web_restore_wanted = false;
+static int web_snapshots = 0;
+
+extern "C" EMSCRIPTEN_KEEPALIVE void wg_request_snapshot()
+{
+	web_snapshot_wanted = true;
+}
+
+/// counts the snapshots written, so the page knows when its request was answered
+extern "C" EMSCRIPTEN_KEEPALIVE int wg_snapshot_count()
+{
+	return web_snapshots;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void wg_restore()
+{
+	web_restore_wanted = true;
+}
+
+
+void web_poll(karte_t *welt)
+{
+	if(  web_restore_wanted  ) {
+		web_restore_wanted = false;
+		web_snapshot_wanted = false;
+		// as the load dialogue does it
+		tool_t::simple_tool[TOOL_WORK_WORLD]->set_default_param("l0/wg/restore.sve");
+		welt->set_tool( tool_t::simple_tool[TOOL_WORK_WORLD], NULL );
+		return;
+	}
+	if(  web_snapshot_wanted  ) {
+		web_snapshot_wanted = false;
+		// none of the world behind the main menu
+		if(  welt->type_of_generation != karte_t::AUTO_GENERATED  ) {
+			welt->save( "/wg/snapshot.sve", true, env_t::savegame_version_str, true );
+			web_snapshots++;
+		}
+	}
+}
+#endif
+
+
 bool karte_t::interactive(uint32 quit_month)
 {
 	finish_loop = false;
@@ -6331,6 +6381,13 @@ bool karte_t::interactive(uint32 quit_month)
 		if (env_t::quit_simutrans){
 			break;
 		}
+
+#ifdef __EMSCRIPTEN__
+		web_poll( this );
+		if(  finish_loop  ) {
+			break;
+		}
+#endif
 
 		if (next_deferred_move_to != koord3d::invalid) {
 			// some tool movement is expensive (like route search) and must be done outsied sync_step

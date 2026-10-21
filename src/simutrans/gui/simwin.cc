@@ -2691,6 +2691,14 @@ void modal_dialogue(gui_frame_t* gui, ptrdiff_t magic, karte_t* welt, bool (*qui
 
 			} while(  ev.ev_class != EVENT_NONE  &&  dr_time()-frame_start_time < 50  );
 
+#ifdef __EMSCRIPTEN__
+			// Resume from the main menu
+			web_poll( welt );
+			if(  !win_is_open(gui)  ) {
+				break;
+			}
+#endif
+
 			const uint32 delta_t = (ms_per_frame * welt->get_time_multiplier()) / 16;
 			DBG_DEBUG4("modal_dialogue", "calling welt->sync_step(%u)", delta_t);
 			welt->sync_step(delta_t);

@@ -1254,6 +1254,15 @@ private:
 };
 
 
+#ifdef __EMSCRIPTEN__
+/**
+ * The web page's requests, answered between two steps: writes the game in
+ * progress to /wg/snapshot.sve, or loads /wg/restore.sve (Resume).
+ */
+void web_poll(karte_t *welt);
+#endif
+
+
 /**
  * Returns pointer to single instance of the world.
  */
