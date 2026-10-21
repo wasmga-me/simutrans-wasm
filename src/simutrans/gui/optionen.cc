@@ -73,7 +73,13 @@ optionen_gui_t::optionen_gui_t() :
 			new_component<gui_fill_t>();
 			add_component(option_buttons + i);
 			new_component_span<gui_divider_t>(2);
-		} else add_component(option_buttons + i);
+		}
+#ifdef __EMSCRIPTEN__
+		else if (i == BUTTON_QUIT) {
+			// on the web the page is the window, so there is nothing to quit to
+		}
+#endif
+		else add_component(option_buttons + i);
 	}
 
 	reset_min_windowsize();

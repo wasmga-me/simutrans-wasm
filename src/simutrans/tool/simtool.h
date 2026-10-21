@@ -1087,6 +1087,10 @@ class tool_quit_t : public tool_t {
 public:
 	tool_quit_t() : tool_t(TOOL_QUIT | SIMPLE_TOOL) { flags = WFL_LOCAL | WFL_NO_CHK; }
 	char const* get_tooltip(player_t const*) const OVERRIDE { return translator::translate( (default_param && *default_param) ? "Neue Welt" : "Beenden"); }
+#ifdef __EMSCRIPTEN__
+	// on the web only the new world part stays: the page is the window, so there is nothing to quit to
+	image_id get_icon(player_t *) const OVERRIDE { return (default_param && *default_param) ? icon : IMG_EMPTY; }
+#endif
 	bool init( player_t * ) OVERRIDE;
 	bool is_init_keeps_game_state() const OVERRIDE { return false; }
 	bool is_work_keeps_game_state() const OVERRIDE { return false; }

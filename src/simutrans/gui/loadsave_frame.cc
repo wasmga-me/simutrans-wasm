@@ -65,7 +65,9 @@ loadsave_frame_t::loadsave_frame_t(bool do_load, bool back_to_menu) : savegame_f
 	if(do_load) {
 		set_name(translator::translate("Laden"));
 		easy_server.init( button_t::square_automatic, "Start this as a server");
-		bottom_left_frame.add_component(&easy_server);
+#ifndef __EMSCRIPTEN__
+		bottom_left_frame.add_component(&easy_server); // the web build plays alone
+#endif
 	}
 	else {
 		set_filename(welt->get_settings().get_filename());

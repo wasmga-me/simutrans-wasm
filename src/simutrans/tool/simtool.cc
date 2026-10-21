@@ -8149,6 +8149,9 @@ bool tool_quit_t::init( player_t * )
 		welt->stop(false);
 	}
 	else {
+#ifdef __EMSCRIPTEN__
+		return false;
+#endif
 		// totally quit
 		welt->stop(true);
 	}

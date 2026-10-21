@@ -41,7 +41,9 @@ scenario_frame_t::scenario_frame_t() : savegame_frame_t(NULL, true, NULL, false,
 	this->add_path(pakset_scenario);
 
 	easy_server.init( button_t::square_automatic, "Start this as a server");
-	bottom_left_frame.add_component(&easy_server);
+#ifndef __EMSCRIPTEN__
+	bottom_left_frame.add_component(&easy_server); // the web build plays alone
+#endif
 
 	set_name(translator::translate("Load scenario"));
 	set_focus(NULL);

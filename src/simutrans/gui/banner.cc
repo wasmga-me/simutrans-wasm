@@ -99,7 +99,10 @@ banner_t::banner_t() : gui_frame_t("")
 		// Play online button
 		join_map.init( button_t::roundbox | button_t::flexible, "join game");
 		join_map.add_listener( this );
+#ifndef __EMSCRIPTEN__
+		// the web build plays alone
 		add_component( &join_map );
+#endif
 
 		// Options button
 		options.init( button_t::roundbox | button_t::flexible, "Optionen");
@@ -109,19 +112,24 @@ banner_t::banner_t() : gui_frame_t("")
 		// Install button
 		install.init( button_t::roundbox | button_t::flexible, "Install");
 		install.add_listener( this );
+#ifndef __EMSCRIPTEN__
+		// the web build comes with its pakset
 		add_component( &install );
+#endif
 
 		new_component<gui_fill_t>(false, true);
 			// narrow screen
 		image1 = new_component<gui_image_t>();
 		image1->set_image(skinverwaltung_t::logosymbol->get_image_id(0), true);
 		image1->set_visible(false);
-		new_component<gui_divider_t>();
-
 		// Quit button
 		quit.init( button_t::roundbox | button_t::flexible, "Beenden");
 		quit.add_listener( this );
+#ifndef __EMSCRIPTEN__
+		// on the web the page is the window, so there is nothing to quit to
+		new_component<gui_divider_t>();
 		add_component( &quit );
+#endif
 	}
 	end_table();
 
