@@ -8,6 +8,9 @@
 #include "../utils/plainstring.h"
 #include "../dataobj/environment.h"
 #include "music.h"
+#ifdef __EMSCRIPTEN__
+#include "../sound/sound.h"
+#endif
 
 // fluidsynth music routine interfaces
 static int         midi_number = -1;
@@ -17,6 +20,20 @@ fluid_settings_t* settings;
 fluid_synth_t* synth;
 fluid_audio_driver_t* adriver;
 fluid_player_t* player;
+
+#ifdef __EMSCRIPTEN__
+// No threads on the web: the sound routine renders the synth from its callback,
+// which never runs while the game itself runs, and this flag stands for the audio driver.
+static bool rendering = false;
+
+bool dr_render_midi(sint16 *stereo, int frames)
+{
+	if(  !rendering  ||  !synth  ) {
+		return false;
+	}
+	return fluid_synth_write_s16( synth, frames, stereo, 0, 2, stereo, 1, 2 ) == FLUID_OK;
+}
+#endif
 
 // Predefined list of paths to search for soundfonts
 static const char * default_sf_paths[] = {
@@ -91,6 +108,10 @@ int dr_load_midi(const char *filename)
  */
 static void suspend_rendering()
 {
+#ifdef __EMSCRIPTEN__
+	rendering = false;
+	return;
+#endif
 	if(  adriver  ) {
 		delete_fluid_audio_driver( adriver );
 		adriver = NULL;
@@ -103,6 +124,10 @@ static void suspend_rendering()
  */
 static void resume_rendering()
 {
+#ifdef __EMSCRIPTEN__
+	rendering = synth != NULL;
+	return;
+#endif
 	if(  !adriver  &&  synth  ) {
 		if(  !(adriver = new_fluid_audio_driver( settings, synth ))  ) {
 			dbg->warning("resume_rendering()", "FluidSynth: Audio driver restart failed.");
@@ -280,20 +305,29 @@ bool dr_init_midi()
 	fluid_settings_setint( settings, "synth.cpu-cores", env_t::num_threads );
 	fluid_settings_setstr( settings, "synth.midi-bank-select", "gm" );
 
+#ifdef __EMSCRIPTEN__
+	(void)fluidsynth_driver;
+	fluid_settings_setnum( settings, "synth.sample-rate", dr_get_sample_rate() );
+#else
 	if(  fluid_settings_setstr( settings, "audio.driver", fluidsynth_driver.c_str() ) != FLUID_OK  ) {
 		dbg->warning("dr_init_midi()", "FluidSynth: Set MIDI driver %s failed.", fluidsynth_driver.c_str());
 		return false;
 	}
+#endif
 
 	if(  !(synth = new_fluid_synth( settings ))  ) {
 		dbg->warning("dr_init_midi()", "FluidSynth: Synth setup failed.");
 		return false;
 	}
 
+#ifdef __EMSCRIPTEN__
+	rendering = true;
+#else
 	if(  !(adriver = new_fluid_audio_driver( settings, synth ))  ) {
 		dbg->warning("dr_init_midi()", "FluidSynth: Audio driver setup failed.");
 		return false;
 	}
+#endif
 
 	// User defined font first
 	if(  dr_load_sf( env_t::soundfont_filename.c_str() ) || dr_load_sf( ((std::string)env_t::base_dir + "music/" + env_t::soundfont_filename).c_str() )  ) {

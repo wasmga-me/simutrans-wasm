@@ -12,6 +12,10 @@
 #endif
 
 #include "sound.h"
+#if defined(USE_FLUIDSYNTH_MIDI) && defined(__EMSCRIPTEN__)
+#include "../music/music.h"
+#include "../macros.h"
+#endif
 #include "../simmem.h"
 #include "../simdebug.h"
 
@@ -75,6 +79,15 @@ void sdl_sound_callback(void *, Uint8 * stream, int len)
 {
 	memset(stream, 0, len); // SDL2 requires the output stream to be fully written on every callback.
 
+#if defined(USE_FLUIDSYNTH_MIDI) && defined(__EMSCRIPTEN__)
+	// the music, which has no audio driver of its own here
+	static sint16 music[8192];
+	const int frames = len / (int)(2 * sizeof(sint16));
+	if(  frames * 2 <= (int)lengthof(music)  &&  dr_render_midi( music, frames )  ) {
+		SDL_MixAudioFormat( stream, (Uint8 *)music, output_audio_format.format, frames * 2 * sizeof(sint16), SDL_MIX_MAXVOLUME );
+	}
+#endif
+
 	// add all the sample that need to be played
 	for(  int c = 0;  c < NUM_AUDIO_CHANNELS;  c++  ) {
 		if (channels[c].sample == NO_SAMPLE) {
@@ -124,8 +137,16 @@ bool dr_init_sound()
 	desired.userdata = NULL;
 	desired.callback = sdl_sound_callback;
 
+#ifdef __EMSCRIPTEN__
+	// stereo 16 bit, the format the music is mixed in with, at the browser's rate
+	desired.freq     = 44100;
+	desired.channels = 2;
+	desired.samples  = 2048;
+	audio_device = SDL_OpenAudioDevice( NULL, 0, &desired, &output_audio_format, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE );
+#else
 	// allow any change as loaded .wav files are converted to output format upon loading
 	audio_device = SDL_OpenAudioDevice( NULL, 0, &desired, &output_audio_format, SDL_AUDIO_ALLOW_ANY_CHANGE );
+#endif
 
 	if(  !audio_device  ) {
 		dbg->error("dr_init_sound(SDL2)", "Could not open required audio channel. Muting.");
@@ -147,6 +168,14 @@ bool dr_init_sound()
 }
 
 
+#ifdef __EMSCRIPTEN__
+int dr_get_sample_rate()
+{
+	return use_sound > 0 ? output_audio_format.freq : 44100;
+}
+
+
+#endif
 int dr_load_sample(const char *filename)
 {
 	if(use_sound<=0  ||  samplenumber>=64) {

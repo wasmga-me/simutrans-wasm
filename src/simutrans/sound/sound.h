@@ -28,4 +28,9 @@ int dr_load_sample(const char* filename);
  */
 void dr_play_sample(int key, int volume);
 
+#ifdef __EMSCRIPTEN__
+/// the sample rate the sound routine plays at, for the music it mixes in
+int dr_get_sample_rate();
+#endif
+
 #endif

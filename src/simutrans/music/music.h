@@ -77,4 +77,13 @@ void dr_destroy_midi();
 bool dr_load_sf(const char * filename);
 #endif
 
+#if defined(USE_FLUIDSYNTH_MIDI) && defined(__EMSCRIPTEN__)
+/**
+ * The web build has no audio driver for FluidSynth: the sound routine asks
+ * for the music, as interleaved stereo at its own sample rate.
+ * @return false if there is none to mix in
+ */
+bool dr_render_midi(sint16 *stereo, int frames);
+#endif
+
 #endif
