@@ -1,6 +1,9 @@
 /*
  * This file is part of the Simutrans project under the Artistic License.
  * (see LICENSE.txt)
+ *
+ * Changed by wasmga.me in October 2026 for the web build: runs on the page's main thread, follows the page's size, leaves full screen to the page, keeps the renderer on resize.
+ * See wasmgame/simutrans.diff and https://github.com/wasmga-me/simutrans-wasm/tree/wasmgame
  */
 
 #if !defined __APPLE__ && !defined __ANDROID__

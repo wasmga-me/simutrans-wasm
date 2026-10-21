@@ -1,6 +1,9 @@
 /*
  * This file is part of the Simutrans project under the Artistic License.
  * (see LICENSE.txt)
+ *
+ * Changed by wasmga.me in October 2026 for the web build: leaves out "Start this as a server".
+ * See wasmgame/simutrans.diff and https://github.com/wasmga-me/simutrans-wasm/tree/wasmgame
  */
 
 #include "../simdebug.h"
