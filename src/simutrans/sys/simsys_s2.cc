@@ -37,6 +37,10 @@ extern char **__argv;
 #include "../music/music.h"
 #include "../utils/unicode.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 
 // Maybe Linux is not fine too, had critical bugs...
 #if !defined(__linux__)
@@ -123,6 +127,51 @@ static Uint8 blank_cursor[] = {
 };
 
 static SDL_Window *window;
+
+#ifdef __EMSCRIPTEN__
+// The web page owns the window: it sizes the game to its game area, keeps
+// full screen to itself and can stand the game still.
+static bool web_held = false;
+static uint32 web_last_yield = 0;
+
+/// Lets the browser draw and handle input; waits here while the page holds the game.
+static void web_yield(uint32 ms)
+{
+	emscripten_sleep(ms);
+	while(  web_held  ) {
+		emscripten_sleep(50);
+	}
+	web_last_yield = SDL_GetTicks();
+}
+
+// The game's own screen scale, and the most the page's game area allows so the
+// game keeps at least WEB_MIN_W x WEB_MIN_H pixels (a phone's area is smaller).
+#define WEB_MIN_W 720
+#define WEB_MIN_H 480
+static sint16 web_scale = 0;
+static int web_fit = 400;
+
+static void web_fit_to(int w, int h)
+{
+	web_fit = min( w * 100 / WEB_MIN_W, h * 100 / WEB_MIN_H );
+	web_fit = max( 25, web_fit );
+}
+
+// The page's game area changed size, in CSS pixels.
+extern "C" EMSCRIPTEN_KEEPALIVE void wg_resize(int w, int h)
+{
+	web_fit_to( w, h );
+	if(  window  ) {
+		SDL_SetWindowSize( window, w, h );
+		dr_set_screen_scale( web_scale );
+	}
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void wg_hold(int on)
+{
+	web_held = on != 0;
+}
+#endif
 static SDL_Renderer *renderer;
 static SDL_Texture *screen_tx;
 static SDL_Surface *screen;
@@ -177,6 +226,9 @@ bool dr_set_screen_scale(sint16 scale_percent)
 {
 	const sint32 old_x_scale = x_scale;
 	const sint32 old_y_scale = y_scale;
+#ifdef __EMSCRIPTEN__
+	web_scale = scale_percent;
+#endif
 
 	if (scale_percent == -1) {
 		float hdpi, vdpi;
@@ -227,6 +279,13 @@ bool dr_set_screen_scale(sint16 scale_percent)
 		x_scale = (scale_percent*SCALE_NEUTRAL_X)/100;
 		y_scale = (scale_percent*SCALE_NEUTRAL_Y)/100;
 	}
+
+#ifdef __EMSCRIPTEN__
+	if(  x_scale * 100 > web_fit * SCALE_NEUTRAL_X  ||  y_scale * 100 > web_fit * SCALE_NEUTRAL_Y  ) {
+		x_scale = ( web_fit * SCALE_NEUTRAL_X ) / 100;
+		y_scale = ( web_fit * SCALE_NEUTRAL_Y ) / 100;
+	}
+#endif
 
 	if (window  &&  (x_scale != old_x_scale || y_scale != old_y_scale)  ) {
 		// force window resize
@@ -400,6 +459,10 @@ bool internal_create_surfaces(int tex_width, int tex_height)
 	if(  sync_blit  ) {
 		flags |= SDL_RENDERER_PRESENTVSYNC;
 	}
+#ifdef __EMSCRIPTEN__
+	// kept from before a resize (see dr_textur_resize)
+	if(  renderer == NULL  )
+#endif
 	renderer = SDL_CreateRenderer( window, -1, flags );
 	if(  renderer == NULL  ) {
 		dbg->warning( "internal_create_surfaces(SDL2)", "Couldn't create accelerated renderer: %s", SDL_GetError() );
@@ -454,6 +517,10 @@ bool internal_create_surfaces(int tex_width, int tex_height)
 // open the window
 int dr_os_open(const scr_size window_size, sint16 fs)
 {
+#ifdef __EMSCRIPTEN__
+	web_fit_to( window_size.w, window_size.h );
+	dr_set_screen_scale( web_scale );
+#endif
 	// scale up
 	resolution res = dr_query_screen_resolution();
 	const int tex_w = clamp( res.w, 1, SCREEN_TO_TEX_X(window_size.w) );
@@ -462,6 +529,9 @@ int dr_os_open(const scr_size window_size, sint16 fs)
 	DBG_MESSAGE("dr_os_open()", "Screen requested %i,%i, available max %i,%i", tex_w, tex_h, res.w, res.h);
 
 	fullscreen = fs ? BORDERLESS : WINDOWED;	// SDL2 has no real fullscreen mode
+#ifdef __EMSCRIPTEN__
+	fullscreen = WINDOWED;
+#endif
 
 	// some cards need those alignments
 	// especially 64bit want a border of 8bytes
@@ -470,6 +540,11 @@ int dr_os_open(const scr_size window_size, sint16 fs)
 	// SDL2 only works with borderless fullscreen (SDL_WINDOW_FULLSCREEN_DESKTOP)
 	Uint32 flags = fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_RESIZABLE;
 	flags |= SDL_WINDOW_ALLOW_HIGHDPI; // apparently needed for Apple retina displays
+#ifdef __EMSCRIPTEN__
+	// The renderer draws with WebGL: without this SDL makes the window again
+	// for it, and the first window's touch handlers stay on the canvas.
+	flags |= SDL_WINDOW_OPENGL;
+#endif
 #ifdef __ANDROID__
 	// needed for landscape apparently
 	flags |= SDL_WINDOW_RESIZABLE;
@@ -529,9 +604,15 @@ int dr_textur_resize(unsigned short** const textur, int tex_w, int const tex_h)
 		// First free surface and then renderer.
 		SDL_FreeSurface( screen );
 		screen = NULL;
+#ifdef __EMSCRIPTEN__
+		// Deleting the WebGL context would take every event handler off the
+		// canvas with it, so the renderer stays and the texture is made again.
+		SDL_DestroyTexture( screen_tx );
+#else
 		// This destroys texture as well.
 		SDL_DestroyRenderer( renderer );
 		renderer = NULL;
+#endif
 		screen_tx = NULL;
 
 		internal_create_surfaces( tex_pitch, tex_h );
@@ -598,6 +679,12 @@ void dr_flush()
 	SDL_RenderCopy( renderer, screen_tx, &rSrc, NULL );
 
 	SDL_RenderPresent( renderer );
+#ifdef __EMSCRIPTEN__
+	// long steps and map building draw without sleeping in between
+	if(  web_held  ||  SDL_GetTicks() - web_last_yield > 25  ) {
+		web_yield( 0 );
+	}
+#endif
 }
 
 
@@ -1177,6 +1264,10 @@ uint32 dr_time()
 
 void dr_sleep(uint32 usec)
 {
+#ifdef __EMSCRIPTEN__
+	web_yield( usec );
+	return;
+#endif
 	SDL_Delay( usec );
 }
 
@@ -1230,6 +1321,9 @@ sint16 dr_get_fullscreen()
 
 sint16 dr_toggle_borderless()
 {
+#ifdef __EMSCRIPTEN__
+	return WINDOWED;
+#endif
 	if ( fullscreen ) {
 		SDL_SetWindowFullscreen(window, 0);
 		SDL_SetWindowPosition(window, 10, 10);
@@ -1245,6 +1339,9 @@ sint16 dr_toggle_borderless()
 
 sint16 dr_suspend_fullscreen()
 {
+#ifdef __EMSCRIPTEN__
+	return WINDOWED;
+#endif
 	int was_fullscreen = fullscreen;
 	if (fullscreen) {
 		SDL_SetWindowFullscreen(window, 0);
@@ -1256,6 +1353,9 @@ sint16 dr_suspend_fullscreen()
 
 void dr_restore_fullscreen(sint16 was_fullscreen)
 {
+#ifdef __EMSCRIPTEN__
+	return;
+#endif
 	SDL_RestoreWindow(window);
 	if(was_fullscreen) {
 		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);

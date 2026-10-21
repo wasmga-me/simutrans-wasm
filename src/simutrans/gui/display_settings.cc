@@ -163,12 +163,15 @@ gui_settings_t::gui_settings_t()
 	fullscreen.init( button_t::square_state, "Fullscreen (changed after restart)" );
 	fullscreen.pressed = ( dr_get_fullscreen() == FULLSCREEN );
 	fullscreen.enable(dr_has_fullscreen());
-	add_component( &fullscreen, 3 );
 
 	borderless.init( button_t::square_state, "Borderless (disabled on fullscreen)" );
 	borderless.enable ( dr_get_fullscreen() != FULLSCREEN );
 	borderless.pressed = ( dr_get_fullscreen() == BORDERLESS );
+#ifndef __EMSCRIPTEN__
+	// on the web the page has the full screen button
+	add_component( &fullscreen, 3 );
 	add_component( &borderless, 3 );
+#endif
 
 	// Frame time label
 	new_component<gui_label_t>("Frame time:");
