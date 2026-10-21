@@ -565,6 +565,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wg_save_files()
 	if(  env_t::user_dir == NULL  ) {
 		return;
 	}
+	// the game may be part way through reading files from another folder
+	char cwd[PATH_MAX];
+	if(  !dr_getcwd( cwd, sizeof(cwd) )  ) {
+		return;
+	}
 	dr_chdir( env_t::user_dir );
 	loadsave_t settings_file;
 	if(  settings_file.wr_open("settings.xml",loadsave_t::xml,0,"settings only/",SAVEGAME_VER_NR) == loadsave_t::FILE_STATUS_OK  ) {
@@ -572,6 +577,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wg_save_files()
 		env_t::default_settings.rdwr(&settings_file);
 		settings_file.close();
 	}
+	dr_chdir( cwd );
 }
 #endif
 

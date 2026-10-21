@@ -2,7 +2,7 @@
  * This file is part of the Simutrans project under the Artistic License.
  * (see LICENSE.txt)
  *
- * Changed by wasmga.me in October 2026 for the web build: runs on the page's main thread, follows the page's size, leaves full screen to the page, keeps the renderer on resize.
+ * Changed by wasmga.me in October 2026 for the web build: runs on the page's main thread, follows the page's size, leaves full screen to the page, keeps the renderer on resize, leaves unloading to the page.
  * See wasmgame/simutrans.diff and https://github.com/wasmga-me/simutrans-wasm/tree/wasmgame
  */
 
@@ -337,6 +337,11 @@ static int SDLCALL my_event_filter(void* /*userdata*/, SDL_Event* event)
 		return 0;
 
 	case SDL_APP_TERMINATING:
+#ifdef __EMSCRIPTEN__
+		// sent as the page starts to unload, which it may not finish (or come
+		// back from the back-forward cache): the page saves the settings itself
+		return 0;
+#endif
 		// quitting immediate, save settings and game without visual feedback
 		intr_disable();
 		DBG_DEBUG("SDL_APP_TERMINATING", "env_t::reload_and_save_on_quit=%d", env_t::reload_and_save_on_quit);

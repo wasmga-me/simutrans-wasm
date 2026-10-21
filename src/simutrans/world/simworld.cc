@@ -3826,6 +3826,11 @@ bool karte_t::load(const char *filename)
 	mute_sound(true);
 	gfx->set_show_load_cursor(true);
 	loadsave_t file;
+#ifdef __EMSCRIPTEN__
+	// Resume's file is the page's, not one to save over: the game keeps its name
+	const bool web_resume = strcmp( filename, "/wg/restore.sve" ) == 0;
+	const std::string web_name = settings.get_filename();
+#endif
 
 	// clear hash table with missing paks (may cause some small memory loss though)
 	pakset_manager_t::clear_missing_paks();
@@ -3972,7 +3977,7 @@ bool karte_t::load(const char *filename)
 			}
 #ifdef __EMSCRIPTEN__
 			// Resume carries on without a word
-			if(  strcmp( filename, "/wg/restore.sve" ) != 0  )
+			if(  !web_resume  )
 #endif
 			create_win( new news_img("Spielstand wurde\ngeladen!\n"), w_time_delete, magic_none);
 		}
@@ -3987,7 +3992,11 @@ bool karte_t::load(const char *filename)
 
 		set_tool( tool_t::general_tool[TOOL_QUERY], get_active_player() );
 	}
+#ifdef __EMSCRIPTEN__
+	settings.set_filename( web_resume ? web_name.c_str() : filename );
+#else
 	settings.set_filename(filename);
+#endif
 	gfx->set_show_load_cursor(false);
 	return ok;
 }
